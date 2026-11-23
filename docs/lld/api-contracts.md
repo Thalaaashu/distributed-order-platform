@@ -4,7 +4,7 @@
 
 Related: [Order service LLD](order-service.md) · [Class design](class-design.md) · [Database design](database-design.md) · [HLD architecture](../hld/architecture.md)
 
-> **Status: [PLANNED].** No controller exists yet. This is the contract the Phase 1 code must satisfy. JSON examples are **[ILLUSTRATIVE]** designs, not captured responses. The "Verified examples" section is intentionally empty until real `curl` transcripts exist.
+> **Status: partially [IMPLEMENTED].** `POST /api/v1/orders` and `GET /api/v1/orders/{orderId}` exist (Increment 1, see [Verified examples](#verified-examples)). List, cancel, `Idempotency-Key` and the rest are still **[PLANNED]**. Where the illustrative DTOs below differ from the code (money is `BigDecimal`, field is `orderId`, one `currency` per order, `unitPrice` instead of `unitPriceMinor`), the code and [ADR-0011](../hld/architecture-decisions.md#adr-0011--order-service-foundations-bigdecimal-money-feature-first-packages-problemjson-no-envelope) are authoritative. JSON examples in the DTO sections are **[ILLUSTRATIVE]**.
 
 ## Contents
 - [Conventions](#conventions)
@@ -23,7 +23,7 @@ Related: [Order service LLD](order-service.md) · [Class design](class-design.md
 
 - Base path `/api/v1`. JSON, UTF-8. Resource nouns, plural.
 - IDs are UUIDs (strings). Timestamps are ISO-8601 UTC (`2026-10-29T15:47:59Z`).
-- Money: integer minor units (`amountMinor`) + ISO-4217 `currency`. Never floating point.
+- Money: `BigDecimal` serialised as a JSON number with scale 2, plus one ISO-4217 `currency` per order. Never floating point ([ADR-0011](../hld/architecture-decisions.md#adr-0011--order-service-foundations-bigdecimal-money-feature-first-packages-problemjson-no-envelope)).
 - Request correlation: client may send `X-Request-Id`; server generates one if absent and echoes it back and in logs.
 - DTOs ≠ entities. The API shape is a contract; the entity is an implementation detail ([why](class-design.md#entity-vs-domain-model)).
 
@@ -173,8 +173,40 @@ Compatibility rules: add optional fields only; never reuse field meanings; consu
 
 ## Verified examples
 
-_None yet._ After Phase 1, paste real `curl -i` transcripts here, with date and commit hash.
+**[IMPLEMENTED] / VERIFIED** — real `curl -i` output from `./mvnw spring-boot:run` on 2026-11-22 (uncommitted Increment 1 on top of `9982eeb`; H2 in-memory). Output is verbatim except that headers other than `Location` and `Content-Type` are omitted; IDs are the real random UUIDs from that run.
+
+`POST /api/v1/orders` → `201`
+
+```http
+HTTP/1.1 201
+Location: http://localhost:8080/api/v1/orders/a2965624-d133-44b1-b2be-fadfd51ae513
+Content-Type: application/json
+
+{"orderId":"a2965624-d133-44b1-b2be-fadfd51ae513","customerId":"6f91474d-4530-4a64-9301-6f457560dbdc","status":"CREATED","totalAmount":26.28,"currency":"USD","items":[{"productId":"e1f769da-7a2a-455d-b95e-02fd8a845e38","quantity":2,"unitPrice":12.99},{"productId":"e1f769da-7a2a-455d-b95e-02fd8a845e38","quantity":3,"unitPrice":0.10}],"createdAt":"2026-11-22T07:16:45.825Z","updatedAt":"2026-11-22T07:16:45.825Z","version":0}
+```
+
+`GET /api/v1/orders/{orderId}` → `200` with a body byte-identical to the POST response (asserted by `OrderApiIntegrationTest.postAndGetReturnIdenticalRepresentation`).
+
+`GET` unknown id → `404`:
+
+```json
+{"detail":"Order 77611094-1b7e-4a2a-a7e7-08a56e300518 was not found","instance":"/api/v1/orders/77611094-1B7E-4A2A-A7E7-08A56E300518","status":404,"title":"Not Found","code":"NOT_FOUND"}
+```
+
+`POST` with `{"currency":"usd","items":[]}` → `400`:
+
+```json
+{"detail":"Request validation failed","instance":"/api/v1/orders","status":400,"title":"Bad Request","code":"VALIDATION_FAILED","errors":[{"field":"currency","message":"must be a 3-letter uppercase ISO-4217 code"},{"field":"customerId","message":"must not be null"},{"field":"items","message":"must not be empty"}]}
+```
+
+`POST` with currency `ZZZ` → `422`:
+
+```json
+{"detail":"Unsupported currency code: ZZZ","instance":"/api/v1/orders","status":422,"title":"Unprocessable Entity","code":"INVALID_ORDER"}
+```
+
+Known gaps: a repeated `POST` creates a second order (no idempotency yet); the `type` field of problem responses is the default `about:blank`.
 
 ## Currently available endpoint
 
-Only the Actuator health endpoint exists **[UNVERIFIED]**: `GET /actuator/health` → `{"status":"UP"}` (reported by the author; actuator dependency present in [`pom.xml`](../../pom.xml)).
+`GET /actuator/health` → `{"status":"UP"}` **[UNVERIFIED in this session]**; the application started and served the endpoints above, but the actuator health call itself was only used as a readiness probe and its body was not inspected.

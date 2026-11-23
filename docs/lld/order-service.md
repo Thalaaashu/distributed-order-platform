@@ -4,7 +4,7 @@
 
 Related: [API contracts](api-contracts.md) · [Database design](database-design.md) · [Class design](class-design.md) · [Sequence diagrams](sequence-diagrams.md) · [HLD architecture](../hld/architecture.md) · [Requirements](../hld/requirements.md)
 
-> **Status of this document: design [PLANNED].** The repository currently contains only [`DistributedOrderPlatformApplication`](../../src/main/java/com/ashish/distributed_order_platform/DistributedOrderPlatformApplication.java). Package names, classes, and code below do not exist yet. Code blocks are **[ILLUSTRATIVE]**.
+> **Status of this document: design, partly [IMPLEMENTED].** Increment 1 (create + get order) is built: `Order`, `OrderItem`, `OrderStatus` (`CREATED`, `CANCELLED`), `OrderRepository`, `OrderService`, `OrderController`, DTOs, `GlobalExceptionHandler`. The implemented package layout is `order.{controller,service,repository,entity,dto,exception}` + `common.exception` + `config` (see [ADR-0011](../hld/architecture-decisions.md#adr-0011--order-service-foundations-bigdecimal-money-feature-first-packages-problemjson-no-envelope)), which supersedes the `api/application/domain/infrastructure` tree below. Everything else, including the state machine beyond `CREATED`→`CANCELLED`, cancel, list, idempotency and events, is still **[PLANNED]**. Code blocks are **[ILLUSTRATIVE]** unless they link to a real file.
 
 ## Contents
 - [Scope](#scope)
